@@ -9,10 +9,41 @@
 #include <errno.h>	/* error codes */
 
 // ioctl commands defined for the pci driver header
-#include "ioctl_cmds.h"
+#include "../../include/ioctl_cmds.h"
 
 int main(int argc, char** argv)
 {
-	printf("hello world\n");
+	int i = 0;
+
+	while (i == 0) {
+	int fd, retval;
+
+	if (argc < 2) {
+		printf("Syntax: %s <device file path>\n", argv[0]);
+		return -EINVAL;
+	}
+
+	if ((fd = open(argv[1], O_RDWR)) < 0) {
+		fprintf(stderr, "Error opening file %s\n", argv[1]);
+		return -EBUSY;
+	}
+
+	unsigned int data = 0x40404079;
+	
+	ioctl(fd, WR_R_DISPLAY);
+	retval = write(fd, &data, sizeof(data));
+	printf("wrote %d bytes\n", retval);
+	
+	ioctl(fd, WR_L_DISPLAY);
+	retval = write(fd, &data, sizeof(data));
+	printf("wrote %d bytes\n", retval);
+	
+	ioctl(fd, RD_PBUTTONS);
+	read(fd, &data, 1);
+	printf("new data: 0x%X\n", data);
+	
+	close(fd);
+	}
 	return 0;
 }
+
