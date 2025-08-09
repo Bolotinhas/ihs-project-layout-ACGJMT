@@ -11,3 +11,6 @@ __pycache__/
 *.mod
 *.o
 *.order
+
+# Windows Zone.Identifier files
+*:Zone.Identifier

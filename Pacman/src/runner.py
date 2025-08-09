@@ -9,6 +9,8 @@ from src.game.state_management import GameState
 from src.gui.screen_management import ScreenManager
 from src.sounds import SoundManager
 from src.log_handle import get_logger
+from integracao import IO
+
 logger = get_logger(__name__)
 
 class GameRun:
@@ -25,6 +27,15 @@ class GameRun:
         self.all_sprites = pygame.sprite.Group()
         self.gui = ScreenManager(self.screen, self.game_state, self.all_sprites)
         logger.info("screen manager object created")
+        
+        # Inicializar hardware para display de 7 segmentos
+        try:
+            self.io_device = IO()
+            self.last_score = -1  # Para rastrear mudanças no placar
+            logger.info("Hardware I/O initialized")
+        except Exception as e:
+            logger.warning(f"Could not initialize hardware I/O: {e}")
+            self.io_device = None
 
     def initialize_highscore(self):
         with open("levels/stats.json") as fp:
@@ -45,6 +56,47 @@ class GameRun:
         sound_manager.load_sound("eat_ghost","assets/sounds/pacman_eatghost.wav", 0.6, 100, 2)
         sound_manager.set_background_music("assets/sounds/backgroud.mp3")
         sound_manager.play_background_music()
+
+    def update_score_display(self):
+        """Atualiza o placar no display de 7 segmentos"""
+        if self.io_device is None:
+            return
+            
+        current_score = self.game_state.points
+        
+        # Só atualiza se o placar mudou para evitar writes desnecessários
+        if current_score != self.last_score:
+            try:
+                # Converter pontuação para string e pegar últimos 8 dígitos
+                score_str = str(current_score).zfill(8)  # Preenche com zeros à esquerda
+                
+                # Separar em duas partes de 4 dígitos cada
+                # Display direito: últimos 4 dígitos (unidades)
+                right_digits = score_str[-4:]
+                # Display esquerdo: 4 dígitos anteriores (milhares)  
+                left_digits = score_str[-8:-4]
+                
+                # Atualizar displays
+                self.io_device.put_DP(0, right_digits)  # Display direito
+                self.io_device.put_DP(1, left_digits)   # Display esquerdo
+                
+                self.last_score = current_score
+                logger.debug(f"Score display updated: {current_score}")
+                
+            except Exception as e:
+                logger.error(f"Error updating score display: {e}")
+
+    def clear_display(self):
+        """Limpa o display de 7 segmentos"""
+        if self.io_device is None:
+            return
+        try:
+            # Exibir zeros nos displays
+            self.io_device.put_DP(0, "0000")  # Display direito
+            self.io_device.put_DP(1, "0000")  # Display esquerdo
+            logger.info("Display cleared")
+        except Exception as e:
+            logger.error(f"Error clearing display: {e}")
 
     def check_highscores(self):
         if self.game_state.points > self.game_state.highscore:
@@ -71,9 +123,11 @@ class GameRun:
             self.all_sprites.draw(self.screen)
             self.all_sprites.update(dt)
             self.check_highscores()
+            self.update_score_display()  # Atualizar display de 7 segmentos
             pygame.display.flip()
             dt = clock.tick(self.game_state.fps)
             dt /= 100
         self.update_highscore()
+        self.clear_display()  # Limpar display quando o jogo terminar
         pygame.quit()
         sys.exit()
